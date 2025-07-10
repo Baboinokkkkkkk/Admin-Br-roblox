@@ -1,0 +1,293 @@
+-- [ ADMIN LOCAL - EXECUTÁVEL NO KRNL ]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local plr = Players.LocalPlayer
+local PlayerGui = plr:WaitForChild("PlayerGui")
+
+local flying, floatPart, bodyVel, bodyGyro, spinBody = false, nil, nil, nil, nil
+local disabledTracks, idleTrack = {}, nil
+local spinning, noclipEnabled = false, false
+
+local function isR6()
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	return hum and hum.RigType == Enum.HumanoidRigType.R6
+end
+
+local function getMoveDirection()
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	return hum and hum.MoveDirection or Vector3.zero
+end
+
+local function getHumanoid()
+	local char = plr.Character or plr.CharacterAdded:Wait()
+	return char:WaitForChild("Humanoid")
+end
+
+local function disableAnimations(char)
+	if isR6() then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local animate = char:FindFirstChild("Animate")
+	local animator = hum and hum:FindFirstChildOfClass("Animator")
+	if animate then animate.Disabled = true end
+	if animator then
+		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+			track:Stop()
+			table.insert(disabledTracks, track)
+		end
+	end
+end
+
+local function restoreAnimations(char)
+	if isR6() then
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			hum.WalkSpeed = 16
+			hum.JumpPower = 50
+		end
+		if idleTrack then idleTrack:Stop() idleTrack = nil end
+		return
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local animate = char:FindFirstChild("Animate")
+	if animate then animate:Destroy() end
+	local starter = game:GetService("StarterPlayer"):FindFirstChild("StarterCharacterScripts")
+	if starter then
+		local template = starter:FindFirstChild("Animate")
+		if template then template:Clone().Parent = char end
+	end
+	if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+	table.clear(disabledTracks)
+end
+
+local function playIdleAnimation(char)
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://180435571"
+	local track = hum:LoadAnimation(anim)
+	track.Priority = Enum.AnimationPriority.Idle
+	track:Play()
+	return track
+end
+
+-- COMANDOS
+local cmds = {}
+
+cmds.fly = function()
+	local char = plr.Character or plr.CharacterAdded:Wait()
+	local hrp = char:WaitForChild("HumanoidRootPart")
+	local hum = getHumanoid()
+
+	flying = true
+	if isR6() then idleTrack = playIdleAnimation(char) else disableAnimations(char) end
+
+	bodyVel = Instance.new("BodyVelocity", hrp)
+	bodyVel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+
+	bodyGyro = Instance.new("BodyGyro", hrp)
+	bodyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+	bodyGyro.P = 1e5
+	bodyGyro.CFrame = hrp.CFrame
+
+	hum.WalkSpeed = 0
+	hum.JumpPower = 0
+end
+
+cmds.unfly = function()
+	flying = false
+	local char = plr.Character
+	local hum = getHumanoid()
+	if bodyVel then bodyVel:Destroy() bodyVel = nil end
+	if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+	restoreAnimations(char)
+	hum.WalkSpeed = 16
+	hum.JumpPower = 50
+end
+
+cmds.speed = function(v)
+	getHumanoid().WalkSpeed = tonumber(v) or 100
+end
+
+cmds.jump = function(v)
+	getHumanoid().JumpPower = tonumber(v) or 120
+end
+
+cmds.noclip = function() noclipEnabled = true end
+cmds.clip = function()
+	noclipEnabled = false
+	for _, p in pairs(plr.Character:GetDescendants()) do
+		if p:IsA("BasePart") then p.CanCollide = true end
+	end
+end
+
+cmds.float = function()
+	local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	if not floatPart then
+		floatPart = Instance.new("BodyPosition")
+		floatPart.Position = hrp.Position + Vector3.new(0, 3, 0)
+		floatPart.MaxForce = Vector3.new(0, 1e5, 0)
+		floatPart.P = 10000
+		floatPart.Name = "FloatForce"
+		floatPart.Parent = hrp
+	end
+end
+
+cmds.unfloat = function()
+	if floatPart then floatPart:Destroy() floatPart = nil end
+end
+
+cmds.spin = function()
+	local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+	if not spinning and hrp then
+		spinBody = Instance.new("BodyAngularVelocity")
+		spinBody.AngularVelocity = Vector3.new(0, 15, 0)
+		spinBody.MaxTorque = Vector3.new(0, 1e5, 0)
+		spinBody.P = 1250
+		spinBody.Parent = hrp
+		spinning = true
+	end
+end
+
+cmds.unspin = function()
+	if spinBody then spinBody:Destroy() spinBody = nil end
+	spinning = false
+end
+
+cmds.invisible = function()
+	for _, p in ipairs(plr.Character:GetDescendants()) do
+		if p:IsA("BasePart") or p:IsA("Decal") then
+			p.Transparency = 1
+		end
+	end
+end
+
+cmds.visible = function()
+	for _, p in ipairs(plr.Character:GetDescendants()) do
+		if p:IsA("BasePart") or p:IsA("Decal") then
+			p.Transparency = 0
+		end
+	end
+end
+
+cmds.view = function(name)
+	if not name or name == "" then
+		workspace.CurrentCamera.CameraSubject = getHumanoid()
+		return
+	end
+	local target
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= plr and p.DisplayName:lower():sub(1, #name) == name:lower() then
+			if target then warn("Vários jogadores encontrados.") return end
+			target = p
+		end
+	end
+	if target and target.Character and target.Character:FindFirstChildOfClass("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
+	end
+end
+
+cmds.touchtp = function()
+	local tool = Instance.new("Tool")
+	tool.Name = "Touch TP"
+	tool.RequiresHandle = false
+	tool.CanBeDropped = false
+	tool.Parent = plr.Backpack
+
+	local equipped = false
+	tool.Equipped:Connect(function(mouse)
+		equipped = true
+		mouse.Button1Down:Connect(function()
+			if not equipped or not mouse.Hit then return end
+			local pos = mouse.Hit.Position
+			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			if hrp then hrp.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0)) end
+		end)
+	end)
+
+	tool.Unequipped:Connect(function() equipped = false end)
+	local conn; conn = plr.CharacterAdded:Connect(function()
+		if tool then tool:Destroy() end
+		if conn then conn:Disconnect() end
+	end)
+end
+
+cmds.rj = function()
+	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
+end
+
+-- GUI
+local gui = Instance.new("ScreenGui", PlayerGui)
+gui.Name = "AdminBallGui"
+gui.ResetOnSpawn = false
+
+local ball = Instance.new("ImageButton", gui)
+ball.Size = UDim2.new(0, 80, 0, 80)
+ball.Position = UDim2.new(0, 20, 0.5, -40)
+ball.BackgroundTransparency = 1
+ball.Image = "rbxassetid://0"
+ball.BackgroundColor3 = Color3.new(0, 0, 0)
+ball.Draggable, ball.Active, ball.Selectable = true, true, true
+
+local stroke = Instance.new("UIStroke", ball)
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(0, 255, 255)
+
+local label = Instance.new("TextLabel", ball)
+label.Text = "CM"
+label.Font = Enum.Font.GothamBlack
+label.TextScaled = true
+label.BackgroundTransparency = 1
+label.Size = UDim2.new(1, 0, 1, 0)
+label.TextColor3 = Color3.new(1, 1, 1)
+
+local input = Instance.new("TextBox", gui)
+input.Size = UDim2.new(0, 250, 0, 40)
+input.Position = UDim2.new(0, 110, 0.5, -20)
+input.Visible = false
+input.PlaceholderText = "Digite um comando..."
+input.Font = Enum.Font.Gotham
+input.TextColor3 = Color3.new(1, 1, 1)
+input.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+input.TextSize = 18
+
+local inputStroke = Instance.new("UIStroke", input)
+inputStroke.Color = Color3.fromRGB(0, 255, 255)
+inputStroke.Thickness = 1
+
+ball.MouseButton1Click:Connect(function()
+	input.Visible = not input.Visible
+	if input.Visible then input:CaptureFocus() end
+end)
+
+input.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		local txt = input.Text
+		if txt:sub(1, 1) == ";" then
+			local args = txt:sub(2):lower():split(" ")
+			local cmd = table.remove(args, 1)
+			if cmds[cmd] then coroutine.wrap(function() cmds[cmd](unpack(args)) end)() end
+		end
+		input.Text = ""
+		input.Visible = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if flying and plr.Character then
+		local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+		local cam = workspace.CurrentCamera
+		if not hrp or not cam then return end
+		local look = cam.CFrame.LookVector
+		local dir = getMoveDirection()
+		local forward = dir:Dot(look) >= 0 and 1 or -1
+		if bodyGyro then bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + look) end
+		if bodyVel then bodyVel.Velocity = look.Unit * 50 * dir.Magnitude * forward end
+	end
+	if noclipEnabled and plr.Character then
+		for _, p in pairs(plr.Character:GetDescendants()) do
+			if p:IsA("BasePart") then p.CanCollide = false end
+		end
+	end
+end)
