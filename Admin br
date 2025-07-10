@@ -1,4 +1,3 @@
--- [ ADMIN LOCAL - EXECUTÁVEL NO KRNL ]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
@@ -71,7 +70,6 @@ local function playIdleAnimation(char)
 	return track
 end
 
--- COMANDOS
 local cmds = {}
 
 cmds.fly = function()
@@ -114,6 +112,7 @@ cmds.jump = function(v)
 end
 
 cmds.noclip = function() noclipEnabled = true end
+
 cmds.clip = function()
 	noclipEnabled = false
 	for _, p in pairs(plr.Character:GetDescendants()) do
@@ -217,22 +216,33 @@ cmds.rj = function()
 	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
 end
 
--- GUI
+-- GUI Setup
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AdminBallGui"
-gui.ResetOnSpawn = false
 
 local ball = Instance.new("ImageButton", gui)
 ball.Size = UDim2.new(0, 80, 0, 80)
 ball.Position = UDim2.new(0, 20, 0.5, -40)
-ball.BackgroundTransparency = 1
-ball.Image = "rbxassetid://0"
 ball.BackgroundColor3 = Color3.new(0, 0, 0)
-ball.Draggable, ball.Active, ball.Selectable = true, true, true
+ball.BorderSizePixel = 0
+ball.AutoButtonColor = false
+ball.Active = true
+ball.Selectable = true
+ball.Draggable = true
 
 local stroke = Instance.new("UIStroke", ball)
 stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(0, 255, 255)
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- RGB Borda animada
+coroutine.wrap(function()
+	while true do
+		for h = 0, 1, 0.01 do
+			stroke.Color = Color3.fromHSV(h, 1, 1)
+			task.wait()
+		end
+	end
+end)()
 
 local label = Instance.new("TextLabel", ball)
 label.Text = "CM"
@@ -242,15 +252,16 @@ label.BackgroundTransparency = 1
 label.Size = UDim2.new(1, 0, 1, 0)
 label.TextColor3 = Color3.new(1, 1, 1)
 
-local input = Instance.new("TextBox", gui)
+local input = Instance.new("TextBox", ball)
 input.Size = UDim2.new(0, 250, 0, 40)
-input.Position = UDim2.new(0, 110, 0.5, -20)
+input.Position = UDim2.new(1, 10, 0.5, -20)
 input.Visible = false
 input.PlaceholderText = "Digite um comando..."
 input.Font = Enum.Font.Gotham
 input.TextColor3 = Color3.new(1, 1, 1)
 input.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 input.TextSize = 18
+input.ClearTextOnFocus = false
 
 local inputStroke = Instance.new("UIStroke", input)
 inputStroke.Color = Color3.fromRGB(0, 255, 255)
@@ -274,6 +285,7 @@ input.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
+-- Loop para controlar o fly e noclip
 RunService.RenderStepped:Connect(function()
 	if flying and plr.Character then
 		local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
